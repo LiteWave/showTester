@@ -1,12 +1,6 @@
 ﻿using System;
 using System.Collections.Generic;
-using System.ComponentModel;
-using System.Data;
-using System.Drawing;
-using System.Linq;
 using System.Runtime.Serialization;
-using System.Text;
-using System.Web;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.IO;
@@ -76,6 +70,8 @@ namespace LWClient
 
     static public Stack<string> ulStack = new Stack<string>();
 
+    static public Stack<string> commandsStack = new Stack<string>();
+
     static public bool inShow = false;
 
     static public int currentRow = 1;
@@ -133,17 +129,24 @@ namespace LWClient
           string s_response = response.ToString();
           string s_response_content = await response.Content.ReadAsStringAsync();
 
-          if (isPost && userLocationToRegister != null)
+          if (isPost)
           {
-            ULResult ulResult = new ULResult();
-            System.Runtime.Serialization.Json.DataContractJsonSerializer jsonSer;
-            jsonSer = new System.Runtime.Serialization.Json.DataContractJsonSerializer(typeof(ULResult));
-            Stream streamContent = await response.Content.ReadAsStreamAsync();
-            ulResult = (ULResult)jsonSer.ReadObject(streamContent);
-            ulStack.Push(ulResult._id);
+            if (userLocationToRegister != null)
+            {
+              ULResult ulResult = new ULResult();
+              System.Runtime.Serialization.Json.DataContractJsonSerializer jsonSer;
+              jsonSer = new System.Runtime.Serialization.Json.DataContractJsonSerializer(typeof(ULResult));
+              Stream streamContent = await response.Content.ReadAsStreamAsync();
+              ulResult = (ULResult)jsonSer.ReadObject(streamContent);
+              ulStack.Push(ulResult._id);
+            }
+            else
+            {
+              commandsStack.Push(response.ToString());
+            }
           }
 
-          return response.StatusCode.ToString();
+          return response.ToString();
         }
         else
         {
@@ -192,7 +195,7 @@ namespace LWClient
       RunAsync("api/clients/5260316cbf80240000000001/events/").Wait(1120000);
     }
 
-    public void CallPostUL()
+    public void CallPostUL(string section)
     {
       if (inShow)
       {
@@ -207,24 +210,19 @@ namespace LWClient
       // Generate unique id and save result for EJ.
       userLocation.userKey = g.ToString();
       userLocation.userSeat.level = "floor1";
-      userLocation.userSeat.section = "101";
+      userLocation.userSeat.section = section;
       userLocation.userSeat.row = currentRow.ToString();
-      userLocation.userSeat.seat = "1";   // currentSeat.ToString();
+      userLocation.userSeat.seat = new DateTime(DateTime.Now.Ticks).ToString();   // currentSeat.ToString();
       currentRow++;
       currentSeat++;
 
       // PROD 
-      RunAsync("api/events/5704a152182753c925df18f0/user_locations", true, userLocation).Wait(1120000);
-
+      //RunAsync("api/events/5704a152182753c925df18f0/user_locations", true, userLocation).Wait(1120000);
+      RunAsync("api/events/57e029eaa4cfb00f1f9a79e4/user_locations", true, userLocation).Wait(1120000);
     }
 
     public void CallPostEJ()
     {
-      if (ulStack.Count < 100)
-      {
-        return;
-      }
-
       EJ eventJoin = new EJ();
       eventJoin.mobileTime = new DateTime(DateTime.Now.Ticks).ToString();
 
@@ -245,6 +243,23 @@ namespace LWClient
       // Admin needs to create a Show to join.
       // Once show is created Call CallPostEJ to get the commands
       // Parse the commands and update the UI accordingly.
+
+      int section = 101;
+
+      while (section < 124)
+      {
+        CallPostUL(section.ToString());
+
+        section++;
+
+        if (section == 121)
+        {
+          // There is no section 121.
+          section++;
+        }
+      }
+
+      CallPostEJ();
     }
   }
 
