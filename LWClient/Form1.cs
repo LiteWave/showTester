@@ -4,7 +4,13 @@ using System.Runtime.Serialization;
 using System.Threading.Tasks;
 using System.Windows.Forms;
 using System.IO;
+using System.Net;
 using System.Net.Http;
+using System.Net.Http.Headers;
+using System.Linq;
+using System.Web;
+using System.Runtime.Serialization.Json;
+using System.Text;
 
 namespace LWClient
 {
@@ -14,6 +20,49 @@ namespace LWClient
     {
       InitializeComponent();
     }
+
+      public class Commands
+      {
+          [DataMember]
+          public string ct;
+
+          [DataMember]
+          public string bg;
+
+          [DataMember]
+          public int cl;
+
+          [DataMember]
+          public bool sv;
+      }
+
+      [DataContract]
+      public class EventJoin
+      {
+          [DataMember]
+            public string mobileStartAt;
+
+          [DataMember]
+            public string _winnerId;
+
+          [DataMember]
+            public string _showId;
+
+          [DataMember]
+            public string _user_location_Id;
+
+          [DataMember]
+            public string mobileTimeOffset;
+
+          [DataMember]
+          public string mobileTime;
+
+          [DataMember]
+            public string _id;
+
+          [DataMember]
+          public Commands[] commands;
+      }
 
     [DataContract]
     public class ULResult
@@ -70,7 +119,7 @@ namespace LWClient
 
     static public Stack<string> ulStack = new Stack<string>();
 
-    static public Stack<string> commandsStack = new Stack<string>();
+    static public Stack<EventJoin> commandsStack = new Stack<EventJoin>();
 
     static public bool inShow = false;
 
@@ -78,129 +127,131 @@ namespace LWClient
 
     static public int currentSeat = 1;
 
-    static async Task<string> RunAsync(string url, bool isPost = false, UL userLocationToRegister = null, EJ eventJoin = null)
+    static string MakeWebCall(string url, bool isPost = false, UL userLocationToRegister = null, EJ eventJoin = null)
     {
-      using (var client = new HttpClient())
-      {
-        // New code:
-        //client.BaseAddress = new Uri("http://main-1156949061.us-west-2.elb.amazonaws.com/");
-        client.BaseAddress = new Uri("http://www.litewaveinc.com/");
-        //client.BaseAddress = new Uri("http://127.0.0.1:3000/");
-        client.DefaultRequestHeaders.Accept.Clear();
-        client.DefaultRequestHeaders.Accept.Add(new System.Net.Http.Headers.MediaTypeWithQualityHeaderValue("application/json"));
-        client.Timeout = new TimeSpan(0, 0, 0, 0, 20000);
-
-        HttpResponseMessage response = null;
-        if (isPost)
+        try
         {
-          MemoryStream ms = new MemoryStream();
-          System.Runtime.Serialization.Json.DataContractJsonSerializer jsonSer;
-          if (userLocationToRegister != null)
-          {
-            //Create a Json Serializer for our type
-            jsonSer = new System.Runtime.Serialization.Json.DataContractJsonSerializer(typeof(UL));
+            using (var client = new WebClient())
+            {
+                // New code:
+                //client.BaseAddress = new Uri("http://main-1156949061.us-west-2.elb.amazonaws.com/");
+                //client.BaseAddress = "http://www.litewaveinc.com/";
+                client.BaseAddress = "http://127.0.0.1:3000/";
+                //client.Headers.Add("Accept: application/json");
+                client.Headers.Add("Content-Type", "application/json");
+                
+                string response = null;
+                if (isPost)
+                {
+                    MemoryStream ms = new MemoryStream();
+                    DataContractJsonSerializer jsonSer;
+                    if (userLocationToRegister != null)
+                    {
+                        //Create a Json Serializer for our type
+                        jsonSer = new DataContractJsonSerializer(typeof(UL));
 
-            // use the serializer to write the object to a MemoryStream
-            jsonSer.WriteObject(ms, userLocationToRegister);
-          }
-          else if (eventJoin != null)
-          {
-            //Create a Json Serializer for our type
-            jsonSer = new System.Runtime.Serialization.Json.DataContractJsonSerializer(typeof(EJ));
+                        // use the serializer to write the object to a MemoryStream
+                        jsonSer.WriteObject(ms, userLocationToRegister);
+                    }
+                    else if (eventJoin != null)
+                    {
+                        //Create a Json Serializer for our type
+                        jsonSer = new DataContractJsonSerializer(typeof(EJ));
 
-            // use the serializer to write the object to a MemoryStream
-            jsonSer.WriteObject(ms, eventJoin);
-          }
-          ms.Position = 0;
+                        // use the serializer to write the object to a MemoryStream
+                        jsonSer.WriteObject(ms, eventJoin);
+                    }
+                    ms.Position = 0;
 
-          // use a Stream reader to construct the StringContent (Json)
-          StreamReader sr = new StreamReader(ms);
-          StringContent theContent = new StringContent(sr.ReadToEnd(), System.Text.Encoding.UTF8, "application/json");
+                    // use a Stream reader to construct the StringContent (Json)
+                    StreamReader sr = new StreamReader(ms);
+                    //StringContent theContent = new StringContent(sr.ReadToEnd(), System.Text.Encoding.UTF8, "application/json");
 
-          response = await client.PostAsync(url, theContent);
+                    string data = sr.ReadToEnd();
+                    byte[] postArray = Encoding.ASCII.GetBytes(data);
+                    byte[] responseArray = client.UploadData(url, "POST", postArray);
+                    response = Encoding.ASCII.GetString(responseArray);
+                }
+                else
+                {
+                    Stream data = client.OpenRead(url);
+                    StreamReader reader = new StreamReader(data);
+                    response = reader.ReadToEnd();
+                }
+
+                if (response != null)
+                {
+                    if (isPost && userLocationToRegister != null)
+                    {
+                        ULResult ulResult = new ULResult();
+                        DataContractJsonSerializer jsonSer;
+                        jsonSer = new DataContractJsonSerializer(typeof(ULResult));
+
+                        byte[] byteArray = Encoding.ASCII.GetBytes(response);
+                        MemoryStream stream = new MemoryStream(byteArray);
+                        ulResult = (ULResult)jsonSer.ReadObject(stream);
+                        ulStack.Push(ulResult._id);
+                    }
+                    else if (isPost && eventJoin != null)
+                    {
+                        EventJoin ej = new EventJoin();
+                        DataContractJsonSerializer jsonSer;
+                        jsonSer = new DataContractJsonSerializer(typeof(EventJoin));
+
+                        byte[] byteArray = Encoding.ASCII.GetBytes(response);
+                        MemoryStream stream = new MemoryStream(byteArray);
+                        ej = (EventJoin)jsonSer.ReadObject(stream);
+                        commandsStack.Push(ej);
+                    }
+
+                    return response;
+                }
+            }
         }
-        else
+        catch (WebException webEx)
         {
-          response = await client.GetAsync(url);
+            HttpWebResponse response = (System.Net.HttpWebResponse)webEx.Response;
+            if (response.StatusCode == HttpStatusCode.NotFound)
+            { 
+                System.Diagnostics.Debug.WriteLine("Not found!");
+            }
         }
 
-        if (response.IsSuccessStatusCode)
-        {
-          string s_response = response.ToString();
-          string s_response_content = await response.Content.ReadAsStringAsync();
-
-          if (isPost)
-          {
-            if (userLocationToRegister != null)
-            {
-              ULResult ulResult = new ULResult();
-              System.Runtime.Serialization.Json.DataContractJsonSerializer jsonSer;
-              jsonSer = new System.Runtime.Serialization.Json.DataContractJsonSerializer(typeof(ULResult));
-              Stream streamContent = await response.Content.ReadAsStreamAsync();
-              ulResult = (ULResult)jsonSer.ReadObject(streamContent);
-              ulStack.Push(ulResult._id);
-            }
-            else
-            {
-              commandsStack.Push(response.ToString());
-            }
-          }
-
-          return response.ToString();
-        }
-        else
-        {
-          if (eventJoin != null)
-          {
-            if (response.StatusCode == System.Net.HttpStatusCode.NotFound)
-            {
-              inShow = false;
-              return System.Net.HttpStatusCode.OK.ToString();
-            }
-            else
-            {
-              // if EJ returned successful we are in a show. Stop UL from joining.
-              inShow = true;
-            }
-          }
-
-          return response.ToString();
-        }
-      }
+        return null;
     }
 
     // NOTE: these aren't needed to test a show, BUT would be good to call and parse as a test (separate project really)
     public void CallGetLevelOne()
     {
-      RunAsync("api/stadiums/55de78afa1d569ec11646bc9/levels/one").Wait(1120000);
+      MakeWebCall("api/stadiums/55de78afa1d569ec11646bc9/levels/one");
     }
 
     public void CallGetLevelTwo()
     {
-      RunAsync("api/stadiums/55de78afa1d569ec11646bc9/levels/two").Wait(1120000);
+      MakeWebCall("api/stadiums/55de78afa1d569ec11646bc9/levels/two");
     }
 
     public void CallGetLevelThree()
     {
-      RunAsync("api/stadiums/55de78afa1d569ec11646bc9/levels/three").Wait(1120000);
+      MakeWebCall("api/stadiums/55de78afa1d569ec11646bc9/levels/three");
     }
 
     public void CallGetClient()
     {
-      RunAsync("api/stadiums/client/5260316cbf80240000000001").Wait(1120000);
+      MakeWebCall("api/stadiums/client/5260316cbf80240000000001");
     }
 
     public void CallGetEventsAPI()
     {
-      RunAsync("api/clients/5260316cbf80240000000001/events/").Wait(1120000);
+      MakeWebCall("api/clients/5260316cbf80240000000001/events/");
     }
 
-    public void CallPostUL(string section)
+    public string CallPostUL(string section)
     {
       if (inShow)
       {
         // we are in a show, users can't join anymore.
-        return;
+        return null;
       }
 
       Guid g = Guid.NewGuid();
@@ -212,27 +263,42 @@ namespace LWClient
       userLocation.userSeat.level = "floor1";
       userLocation.userSeat.section = section;
       userLocation.userSeat.row = currentRow.ToString();
-      userLocation.userSeat.seat = new DateTime(DateTime.Now.Ticks).ToString();   // currentSeat.ToString();
+      userLocation.userSeat.seat = DateTime.Now.Ticks.ToString();   // currentSeat.ToString();
       currentRow++;
       currentSeat++;
 
       // PROD 
       //RunAsync("api/events/5704a152182753c925df18f0/user_locations", true, userLocation).Wait(1120000);
-      RunAsync("api/events/57e029eaa4cfb00f1f9a79e4/user_locations", true, userLocation).Wait(1120000);
+      //return MakeWebCall("api/events/57e029eaa4cfb00f1f9a79e4/user_locations", true, userLocation);
+      return MakeWebCall("api/events/55f4ba853451c8bc227664ff/user_locations", true, userLocation);
     }
 
     public void CallPostEJ()
     {
-      EJ eventJoin = new EJ();
-      eventJoin.mobileTime = new DateTime(DateTime.Now.Ticks).ToString();
+        EJ eventJoin = new EJ();
+        eventJoin.mobileTime = new DateTime(DateTime.Now.Ticks).ToString();
 
-      // Get next UL from stack and join show.
-      string api = "api/user_locations/" + ulStack.Pop() + "/event_joins";
-      RunAsync(api, true, null, eventJoin).Wait(1120000);
+        int ulCount = ulStack.Count;
+        int index = 1;
+
+        while (index <= ulCount)
+        {
+            // Get next UL from stack and join show.
+            string api = "api/user_locations/" + ulStack.Pop() + "/event_joins";
+            if (MakeWebCall(api, true, null, eventJoin) == null)
+            {
+                break;
+            }
+
+            index++;
+        }
     }
 
     private void startShow_Click(object sender, EventArgs e)
     {
+        ulStack.Clear();
+        commandsStack.Clear();
+
       // TODO: 
       // Need to create a method for returning the seat info for the next logical section.
       // Need a generic parse command method to update UI elements
@@ -244,11 +310,16 @@ namespace LWClient
       // Once show is created Call CallPostEJ to get the commands
       // Parse the commands and update the UI accordingly.
 
+//        CallGetClient();
+
       int section = 101;
 
       while (section < 124)
       {
-        CallPostUL(section.ToString());
+        if (CallPostUL(section.ToString()) == null)
+        {
+            break;
+        }
 
         section++;
 
