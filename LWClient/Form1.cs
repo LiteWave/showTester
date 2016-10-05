@@ -275,8 +275,8 @@ namespace LWClient
         {
           // New code:
           //client.BaseAddress = new Uri("http://main-1156949061.us-west-2.elb.amazonaws.com/");
-          //client.BaseAddress = "http://www.litewaveinc.com/";
-          client.BaseAddress = "http://127.0.0.1:3000/";
+          client.BaseAddress = "http://www.litewaveinc.com/";
+          //client.BaseAddress = "http://127.0.0.1:3000/";
           //client.Headers.Add("Accept: application/json");
           client.Headers.Add("Content-Type", "application/json");
 
@@ -404,15 +404,19 @@ namespace LWClient
       userLocation.userKey = g.ToString();
       userLocation.userSeat.level = "floor1";
       userLocation.userSeat.section = section;
+      //userLocation.userSeat.section = "101";
       userLocation.userSeat.row = currentRow.ToString();
+      //userLocation.userSeat.row = "1";
       userLocation.userSeat.seat = DateTime.Now.Ticks.ToString();   // currentSeat.ToString();
+      //userLocation.userSeat.seat = "1";   // currentSeat.ToString();
       currentRow++;
       currentSeat++;
 
       // PROD 
-      //RunAsync("api/events/5704a152182753c925df18f0/user_locations", true, userLocation).Wait(1120000);
-      //return MakeWebCall("api/events/57e029eaa4cfb00f1f9a79e4/user_locations", true, userLocation);
-      return MakeWebCall("api/events/55f4ba853451c8bc227664ff/user_locations", true, userLocation);
+      return MakeWebCall("api/events/57f4856cc15516d90fe4e5e1/user_locations", true, userLocation);
+
+      // Local
+      //return MakeWebCall("api/events/55f4ba853451c8bc227664ff/user_locations", true, userLocation);
     }
 
     public bool CallPostEJ(int index, double randomDiff = 0)
@@ -465,7 +469,7 @@ namespace LWClient
       while (DateTime.Now.Ticks < startShowTime.Ticks)
       {
         // Wait here until time to start the show
-        Thread.Sleep(1000);
+        Thread.Sleep(50);
       }
 
       string black = "0,0,0";
